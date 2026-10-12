@@ -39,6 +39,10 @@ data/       Versioned MASVS/MASTG/MASWE catalog (YAML), loaded into Postgres
    ```powershell
    copy .env.example .env
    ```
+   If port 8000, 5173, or 5432 is already taken on your machine ("port is
+   already allocated"), set `API_HOST_PORT`, `WEB_HOST_PORT`, or
+   `POSTGRES_HOST_PORT` in `.env` to a free port instead — everything else
+   (the frontend's API URL, CORS) adjusts automatically.
 3. Build and start everything:
    ```powershell
    docker compose up --build

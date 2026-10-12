@@ -16,7 +16,7 @@ services:
       timeout: 5s
       retries: 10
     ports:
-      - "5432:5432"
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
 
   redis:
     image: redis:7-alpine
@@ -35,6 +35,10 @@ services:
     environment:
       POSTGRES_HOST: postgres
       REDIS_HOST: redis
+      # The frontend is served from the host at WEB_HOST_PORT, so that's the
+      # browser origin the API must accept — derived the same way as
+      # VITE_API_BASE_URL below, overriding any BACKEND_CORS_ORIGINS in .env.
+      BACKEND_CORS_ORIGINS: http://localhost:${WEB_HOST_PORT:-5173}
     depends_on:
       postgres:
         condition: service_healthy
@@ -45,7 +49,7 @@ services:
       - ./data:/data/catalog:ro
       - uploads:/data/uploads
     ports:
-      - "8000:8000"
+      - "${API_HOST_PORT:-8000}:8000"
     command: >
       sh -c "alembic upgrade head &&
              python -m app.services.catalog_loader &&
@@ -76,13 +80,19 @@ services:
       context: ./frontend
     restart: unless-stopped
     env_file: .env
+    environment:
+      # The browser runs on the host, not inside the Docker network, so it
+      # must reach the API via the host-mapped port. Derived from
+      # API_HOST_PORT so changing that one variable in .env is enough —
+      # this overrides any VITE_API_BASE_URL set in .env on purpose.
+      VITE_API_BASE_URL: http://localhost:${API_HOST_PORT:-8000}
     depends_on:
       - api
     volumes:
       - ./frontend:/app
       - /app/node_modules
     ports:
-      - "5173:5173"
+      - "${WEB_HOST_PORT:-5173}:5173"
     command: npm run dev -- --host 0.0.0.0
 
 volumes:
