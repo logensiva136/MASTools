@@ -1,0 +1,308 @@
+# MASVS v2 / MASTG v2 / MASWE starter catalog.
+# See README.md in this directory before treating this as authoritative —
+# cross-check codes against the current OWASP MASTG release.
+
+version: MASVS-v2.1
+
+controls:
+  # --- STORAGE ---
+  - code: MASVS-STORAGE-1
+    category: STORAGE
+    title: Sensitive data is identified and inventoried
+    description: >
+      The app identifies sensitive data it processes (credentials, tokens,
+      PII, keys) so that storage, transit, and logging decisions can be made
+      deliberately rather than by default.
+    mastg_tests: ["MASTG-TEST-0001"]
+    maswe_ids: ["MASWE-0001"]
+    applies_to: ["android", "ios"]
+    automatable: false
+
+  - code: MASVS-STORAGE-2
+    category: STORAGE
+    title: No sensitive data stored outside app-private storage without protection
+    description: >
+      Sensitive data is not written to world-readable locations (external
+      storage, shared preferences without encryption, pasteboard/clipboard,
+      backups) without explicit protection.
+    mastg_tests: ["MASTG-TEST-0002", "MASTG-TEST-0003"]
+    maswe_ids: ["MASWE-0002"]
+    applies_to: ["android", "ios"]
+    automatable: true
+
+  - code: MASVS-STORAGE-3
+    category: STORAGE
+    title: No sensitive data in logs
+    description: >
+      The app does not write sensitive data (tokens, credentials, PII) to
+      system logs, crash reports, or analytics in a form that a local
+      attacker or SDK could read.
+    mastg_tests: ["MASTG-TEST-0004"]
+    maswe_ids: ["MASWE-0003"]
+    applies_to: ["android", "ios"]
+    automatable: false
+
+  - code: MASVS-STORAGE-4
+    category: STORAGE
+    title: No sensitive data shared with third parties unless required
+    description: >
+      Sensitive data is not sent to analytics, ad, or crash-reporting SDKs
+      beyond what is explicitly required and disclosed.
+    mastg_tests: ["MASTG-TEST-0005"]
+    maswe_ids: ["MASWE-0004"]
+    applies_to: ["android", "ios"]
+    automatable: false
+
+  - code: MASVS-STORAGE-5
+    category: STORAGE
+    title: Keyboard cache / autofill excluded for sensitive input fields
+    description: >
+      Sensitive text fields (passwords, card numbers) disable the platform
+      keyboard cache and autofill/autocomplete where supported.
+    mastg_tests: ["MASTG-TEST-0006"]
+    maswe_ids: ["MASWE-0005"]
+    applies_to: ["android", "ios"]
+    automatable: true
+
+  # --- CRYPTO ---
+  - code: MASVS-CRYPTO-1
+    category: CRYPTO
+    title: App relies only on vetted, strong cryptographic primitives
+    description: >
+      The app uses well-established cryptographic algorithms and modes
+      (no custom crypto, no deprecated ciphers such as DES/RC4/ECB).
+    mastg_tests: ["MASTG-TEST-0010"]
+    maswe_ids: ["MASWE-0010"]
+    applies_to: ["android", "ios"]
+    automatable: true
+
+  - code: MASVS-CRYPTO-2
+    category: CRYPTO
+    title: Key management follows platform best practice
+    description: >
+      Cryptographic keys are generated, stored, and rotated using the
+      platform keystore/keychain rather than being hardcoded or derived from
+      static values.
+    mastg_tests: ["MASTG-TEST-0011"]
+    maswe_ids: ["MASWE-0011"]
+    applies_to: ["android", "ios"]
+    automatable: false
+
+  - code: MASVS-CRYPTO-3
+    category: CRYPTO
+    title: No hardcoded secrets in app binary or resources
+    description: >
+      API keys, encryption keys, and credentials are not hardcoded into the
+      binary, resources, or build configuration in recoverable form.
+    mastg_tests: ["MASTG-TEST-0012"]
+    maswe_ids: ["MASWE-0012"]
+    applies_to: ["android", "ios"]
+    automatable: true
+
+  # --- AUTH ---
+  - code: MASVS-AUTH-1
+    category: AUTH
+    title: Authentication and session tokens are handled securely server-side
+    description: >
+      The backend performs authentication/authorization decisions; the app
+      does not rely on client-side checks as the sole access control.
+    mastg_tests: ["MASTG-TEST-0020"]
+    maswe_ids: ["MASWE-0020"]
+    applies_to: ["android", "ios"]
+    automatable: false
+
+  - code: MASVS-AUTH-2
+    category: AUTH
+    title: Session tokens expire and are invalidated on logout
+    description: >
+      Session/refresh tokens have a bounded lifetime and are invalidated
+      server-side on logout or credential change.
+    mastg_tests: ["MASTG-TEST-0021"]
+    maswe_ids: ["MASWE-0021"]
+    applies_to: ["android", "ios"]
+    automatable: false
+
+  - code: MASVS-AUTH-3
+    category: AUTH
+    title: Biometric authentication is bound to a cryptographic operation
+    description: >
+      Where biometrics gate a sensitive action, the result is tied to a
+      keystore-backed crypto operation rather than a boolean the app trusts
+      on its own.
+    mastg_tests: ["MASTG-TEST-0022"]
+    maswe_ids: ["MASWE-0022"]
+    applies_to: ["android", "ios"]
+    automatable: false
+
+  # --- NETWORK ---
+  - code: MASVS-NETWORK-1
+    category: NETWORK
+    title: All network traffic uses TLS
+    description: >
+      The app does not transmit sensitive data over unencrypted channels;
+      cleartext traffic is disabled unless explicitly justified.
+    mastg_tests: ["MASTG-TEST-0030"]
+    maswe_ids: ["MASWE-0030"]
+    applies_to: ["android", "ios"]
+    automatable: true
+
+  - code: MASVS-NETWORK-2
+    category: NETWORK
+    title: TLS configuration follows current best practice
+    description: >
+      The app enforces a reasonable minimum TLS version and does not disable
+      certificate/hostname validation.
+    mastg_tests: ["MASTG-TEST-0031"]
+    maswe_ids: ["MASWE-0031"]
+    applies_to: ["android", "ios"]
+    automatable: true
+
+  - code: MASVS-NETWORK-3
+    category: NETWORK
+    title: Certificate pinning is implemented where justified
+    description: >
+      For high-risk apps, certificate or public-key pinning is implemented
+      with a safe fallback/update mechanism.
+    mastg_tests: ["MASTG-TEST-0032"]
+    maswe_ids: ["MASWE-0032"]
+    applies_to: ["android", "ios"]
+    automatable: false
+
+  # --- PLATFORM ---
+  - code: MASVS-PLATFORM-1
+    category: PLATFORM
+    title: App requests only the permissions it needs
+    description: >
+      Declared platform permissions map to an actual, justifiable app
+      feature; no unused or overly broad permissions.
+    mastg_tests: ["MASTG-TEST-0040"]
+    maswe_ids: ["MASWE-0040"]
+    applies_to: ["android", "ios"]
+    automatable: true
+
+  - code: MASVS-PLATFORM-2
+    category: PLATFORM
+    title: Exported/inter-app components are protected
+    description: >
+      Exported activities, services, broadcast receivers, content providers
+      (Android) or app extensions/URL schemes (iOS) validate input and
+      restrict access appropriately.
+    mastg_tests: ["MASTG-TEST-0041", "MASTG-TEST-0042"]
+    maswe_ids: ["MASWE-0041"]
+    applies_to: ["android", "ios"]
+    automatable: true
+
+  - code: MASVS-PLATFORM-3
+    category: PLATFORM
+    title: WebViews are configured securely
+    description: >
+      WebViews disable unnecessary JS bridges, restrict navigation to
+      trusted origins, and do not load untrusted/mixed content.
+    mastg_tests: ["MASTG-TEST-0043"]
+    maswe_ids: ["MASWE-0042"]
+    applies_to: ["android", "ios"]
+    automatable: false
+
+  - code: MASVS-PLATFORM-4
+    category: PLATFORM
+    title: Deep links / custom URL schemes validate input
+    description: >
+      Deep link and custom URL scheme handlers validate and sanitize
+      parameters before acting on them.
+    mastg_tests: ["MASTG-TEST-0044"]
+    maswe_ids: ["MASWE-0043"]
+    applies_to: ["android", "ios"]
+    automatable: false
+
+  # --- CODE ---
+  - code: MASVS-CODE-1
+    category: CODE
+    title: App is signed with a valid, properly protected key
+    description: >
+      The release build is signed with a key that is not debug/default and
+      is managed with appropriate access control.
+    mastg_tests: ["MASTG-TEST-0050"]
+    maswe_ids: ["MASWE-0050"]
+    applies_to: ["android", "ios"]
+    automatable: true
+
+  - code: MASVS-CODE-2
+    category: CODE
+    title: Debuggable and verbose-logging flags are disabled in release builds
+    description: >
+      The release build does not ship with `debuggable=true`, verbose
+      logging, or developer-only diagnostic endpoints enabled.
+    mastg_tests: ["MASTG-TEST-0051"]
+    maswe_ids: ["MASWE-0051"]
+    applies_to: ["android", "ios"]
+    automatable: true
+
+  - code: MASVS-CODE-3
+    category: CODE
+    title: Third-party components are kept up to date
+    description: >
+      Bundled SDKs and libraries do not have known, unpatched vulnerable
+      versions in the shipped build.
+    mastg_tests: ["MASTG-TEST-0052"]
+    maswe_ids: ["MASWE-0052"]
+    applies_to: ["android", "ios"]
+    automatable: true
+
+  # --- RESILIENCE ---
+  - code: MASVS-RESILIENCE-1
+    category: RESILIENCE
+    title: App detects rooted/jailbroken environments where risk-justified
+    description: >
+      For apps handling high-value data, basic root/jailbreak detection is
+      implemented and feeds into a risk decision (not necessarily a hard
+      block).
+    mastg_tests: ["MASTG-TEST-0060"]
+    maswe_ids: ["MASWE-0060"]
+    applies_to: ["android", "ios"]
+    automatable: false
+
+  - code: MASVS-RESILIENCE-2
+    category: RESILIENCE
+    title: Anti-tampering / integrity checks are present where risk-justified
+    description: >
+      The app can detect repackaging or binary modification for high-risk
+      use cases (e.g. checking signing certificate at runtime).
+    mastg_tests: ["MASTG-TEST-0061"]
+    maswe_ids: ["MASWE-0061"]
+    applies_to: ["android", "ios"]
+    automatable: false
+
+  - code: MASVS-RESILIENCE-3
+    category: RESILIENCE
+    title: Reverse-engineering resistance is proportionate to data sensitivity
+    description: >
+      Obfuscation/anti-debugging measures are applied where the threat model
+      justifies raising the bar for static/dynamic analysis.
+    mastg_tests: ["MASTG-TEST-0062"]
+    maswe_ids: ["MASWE-0062"]
+    applies_to: ["android", "ios"]
+    automatable: false
+
+  # --- PRIVACY ---
+  - code: MASVS-PRIVACY-1
+    category: PRIVACY
+    title: App only collects data with a disclosed purpose
+    description: >
+      Data collection (including via SDKs) matches what is disclosed to the
+      user in the privacy policy / consent flow.
+    mastg_tests: ["MASTG-TEST-0070"]
+    maswe_ids: ["MASWE-0070"]
+    applies_to: ["android", "ios"]
+    automatable: false
+
+  - code: MASVS-PRIVACY-2
+    category: PRIVACY
+    title: User can access, export, or delete their data
+    description: >
+      Where required by applicable regulation, the app or its backend
+      provides a path for users to access, export, or delete their personal
+      data.
+    mastg_tests: ["MASTG-TEST-0071"]
+    maswe_ids: ["MASWE-0071"]
+    applies_to: ["android", "ios"]
+    automatable: false
