@@ -38,8 +38,27 @@ celery_app.conf.update(
 # --- Mapping from extracted metadata -> automated ControlResult updates ---
 # Each mapper receives the extracted_metadata dict and returns
 # (status, evidence) or None if it has nothing to say for that control.
+#
+# Control codes below are real MASVS v2.1 codes (see data/catalog/README.md
+# for how the catalog is generated) and were chosen by tracing each check
+# through its MASWE weakness to that weakness's own masvs-v2 mapping:
+#
+#   sensitive permissions  -> MASWE-0066 "Inadequate Permission Management"
+#                              -> MASVS-PRIVACY-1 "minimizes access to
+#                                 sensitive data and resources"
+#   exported components     -> MASWE-0032 "Insecure Intents"
+#                              -> MASVS-PLATFORM-1 "uses IPC mechanisms securely"
+#   debuggable flag          -> MASWE-0063 "Debug Mechanisms Not Disabled"
+#                              -> MASVS-RESILIENCE-4 "implements anti-dynamic
+#                                 analysis techniques"
+#   cleartext traffic        -> MASWE-0026/0027 (network cleartext weaknesses)
+#                              -> MASVS-NETWORK-1 "secures all network traffic"
+#
+# Keep this in sync with data/catalog/generate_catalog.py's
+# AUTOMATED_CONTROLS set, which marks exactly these four controls
+# `automatable: true` in the generated catalog.
 
-def _map_platform_permissions(meta: dict) -> tuple[models.ResultStatus, str] | None:
+def _map_permission_minimization(meta: dict) -> tuple[models.ResultStatus, str] | None:
     sensitive = meta.get("sensitive_permissions") or []
     if not sensitive:
         return models.ResultStatus.passed, "No permissions in the sensitive-by-default set were declared."
@@ -49,7 +68,7 @@ def _map_platform_permissions(meta: dict) -> tuple[models.ResultStatus, str] | N
     )
 
 
-def _map_exported_components(meta: dict) -> tuple[models.ResultStatus, str] | None:
+def _map_ipc_exported_components(meta: dict) -> tuple[models.ResultStatus, str] | None:
     exported = {
         "activities": meta.get("exported_activities") or [],
         "services": meta.get("exported_services") or [],
@@ -63,7 +82,7 @@ def _map_exported_components(meta: dict) -> tuple[models.ResultStatus, str] | No
     return models.ResultStatus.manual_review, f"Exported components require manual review of access control: {detail}"
 
 
-def _map_debuggable(meta: dict) -> tuple[models.ResultStatus, str] | None:
+def _map_anti_dynamic_analysis(meta: dict) -> tuple[models.ResultStatus, str] | None:
     if meta.get("debuggable") is None:
         return None
     if meta["debuggable"]:
@@ -71,7 +90,7 @@ def _map_debuggable(meta: dict) -> tuple[models.ResultStatus, str] | None:
     return models.ResultStatus.passed, "android:debuggable is not set to true."
 
 
-def _map_cleartext_traffic(meta: dict) -> tuple[models.ResultStatus, str] | None:
+def _map_network_cleartext(meta: dict) -> tuple[models.ResultStatus, str] | None:
     if meta.get("uses_cleartext_traffic") is None:
         return None
     if meta["uses_cleartext_traffic"]:
@@ -83,10 +102,10 @@ def _map_cleartext_traffic(meta: dict) -> tuple[models.ResultStatus, str] | None
 
 
 AUTOMATED_CONTROL_MAPPERS = {
-    "MASVS-PLATFORM-1": _map_platform_permissions,
-    "MASVS-PLATFORM-2": _map_exported_components,
-    "MASVS-CODE-2": _map_debuggable,
-    "MASVS-NETWORK-1": _map_cleartext_traffic,
+    "MASVS-PRIVACY-1": _map_permission_minimization,
+    "MASVS-PLATFORM-1": _map_ipc_exported_components,
+    "MASVS-RESILIENCE-4": _map_anti_dynamic_analysis,
+    "MASVS-NETWORK-1": _map_network_cleartext,
 }
 
 
