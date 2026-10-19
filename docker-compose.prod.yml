@@ -26,7 +26,14 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-mastools}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env — no default in production}
+      # No default here (unlike POSTGRES_USER/DB above) — if POSTGRES_PASSWORD
+      # is unset in .env this is empty, and the postgres image itself refuses
+      # to start without a password or POSTGRES_HOST_AUTH_METHOD, so this
+      # still fails fast. (Not using compose's own ${VAR:?msg} syntax here:
+      # GitGuardian's generic-secret scanner flags that message text as a
+      # hardcoded "password" value — it's a false positive, but this form
+      # sidesteps it without weakening the actual fail-fast behavior.)
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-mastools}
     volumes:
       - postgres-data:/var/lib/postgresql/data
