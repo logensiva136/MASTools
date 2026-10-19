@@ -47,6 +47,17 @@ export default function TestRunPage() {
     refresh();
   }
 
+  async function openReport(testRunId: string, format: "md" | "html") {
+    // Report endpoints require the same Authorization header as every
+    // other request, so they're fetched and opened as a blob: URL rather
+    // than linked with a plain <a href> (which sends no custom headers).
+    const url = await api.openReport(testRunId, format);
+    window.open(url, "_blank");
+    // Revoke once the new tab has had a moment to load it, rather than
+    // immediately (which would race the browser opening the blob).
+    setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  }
+
   if (!testRun) return <p className="muted">Loading...</p>;
 
   return (
@@ -69,16 +80,12 @@ export default function TestRunPage() {
         </div>
         <div style={{ marginTop: "0.75rem", display: "flex", gap: "0.5rem" }}>
           {testRun.status !== "completed" && <button onClick={handleComplete}>Mark complete</button>}
-          <a href={api.reportUrl(testRun.id, "html")} target="_blank" rel="noreferrer">
-            <button className="secondary" type="button">
-              View HTML report
-            </button>
-          </a>
-          <a href={api.reportUrl(testRun.id, "md")} target="_blank" rel="noreferrer">
-            <button className="secondary" type="button">
-              View Markdown report
-            </button>
-          </a>
+          <button className="secondary" type="button" onClick={() => openReport(testRun.id, "html")}>
+            View HTML report
+          </button>
+          <button className="secondary" type="button" onClick={() => openReport(testRun.id, "md")}>
+            View Markdown report
+          </button>
         </div>
       </div>
 
