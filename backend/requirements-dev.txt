@@ -1,0 +1,5 @@
+# Test-only dependencies. Not installed in the api/worker images — see
+# .github/workflows/ci.yml for where these actually get used.
+-r requirements.txt
+pytest==8.3.4
+httpx==0.28.1
