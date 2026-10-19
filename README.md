@@ -72,11 +72,6 @@ data/       Versioned MASVS/MASTG/MASWE catalog (YAML), loaded into Postgres
 - PDF report export (HTML report is designed to be print-to-PDF in the
   meantime).
 
-**Known limitation:** automated check results are only backfilled into a
-test run's `ControlResult` rows at the moment `POST /apps/{id}/scan`
-finishes. If you create a test run *after* a scan already ran, re-trigger
-the scan once to populate that run's automated fields — `create_test_run`
-does not currently backfill from pre-existing `extracted_metadata`.
 
 ## Updating the MASVS/MASTG/MASWE catalog
 

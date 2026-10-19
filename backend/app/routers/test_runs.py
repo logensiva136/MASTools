@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 from app import models, schemas
 from app.config import get_settings
 from app.database import get_db
+from app.services.automated_checks import apply_automated_results
 
 router = APIRouter(prefix="/api", tags=["test-runs"])
 
@@ -42,6 +43,12 @@ def create_test_run(app_id: uuid.UUID, payload: schemas.TestRunCreate, db: Sessi
                 method=models.ResultMethod.manual,
             )
         )
+    db.flush()
+
+    # If a scan already ran on this app (extracted_metadata is already
+    # populated), backfill the automated fields into this brand-new test
+    # run right away instead of leaving them pending until the next scan.
+    apply_automated_results(db, app_row, test_run)
 
     db.commit()
     db.refresh(test_run)
