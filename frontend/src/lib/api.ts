@@ -1,4 +1,13 @@
+import { clearToken, getToken } from "./auth";
+
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+
+// Fired on any 401 so the app shell can drop back to the login screen —
+// set by AuthContext so this module doesn't need to import React state.
+let onUnauthorized: (() => void) | null = null;
+export function setUnauthorizedHandler(handler: (() => void) | null) {
+  onUnauthorized = handler;
+}
 
 export type Platform = "android" | "ios";
 export type AppStatus = "uploaded" | "analyzing" | "analyzed" | "failed";
@@ -75,10 +84,17 @@ export interface Finding {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    headers: init?.body instanceof FormData ? undefined : { "Content-Type": "application/json" },
-    ...init,
-  });
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (!(init?.body instanceof FormData)) headers["Content-Type"] = "application/json";
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(`${BASE_URL}${path}`, { ...init, headers: { ...headers, ...init?.headers } });
+
+  if (res.status === 401) {
+    clearToken();
+    onUnauthorized?.();
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(`${res.status} ${res.statusText}: ${text}`);
@@ -87,7 +103,47 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// Report endpoints need the same Authorization header as everything else,
+// so a plain <a href> (no custom headers) can't hit them directly — fetch
+// the report as the authenticated client and hand back a blob: URL the
+// browser can open, same as any other fetched-then-downloaded file.
+async function fetchReportBlobUrl(testRunId: string, format: "md" | "html"): Promise<string> {
+  const token = getToken();
+  const res = await fetch(`${BASE_URL}/api/test-runs/${testRunId}/report.${format}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  if (res.status === 401) {
+    clearToken();
+    onUnauthorized?.();
+  }
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
+}
+
+export interface User {
+  id: string;
+  email: string;
+  created_at: string;
+}
+
 export const api = {
+  register: (email: string, password: string) =>
+    request<User>("/api/auth/register", { method: "POST", body: JSON.stringify({ email, password }) }),
+  login: async (email: string, password: string): Promise<string> => {
+    const form = new URLSearchParams();
+    form.set("username", email);
+    form.set("password", password);
+    const res = await fetch(`${BASE_URL}/api/auth/login`, { method: "POST", body: form });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`${res.status} ${res.statusText}: ${text}`);
+    }
+    const data = (await res.json()) as { access_token: string };
+    return data.access_token;
+  },
+  me: () => request<User>("/api/auth/me"),
+
   listProjects: () => request<Project[]>("/api/projects"),
   createProject: (name: string, description?: string) =>
     request<Project>("/api/projects", { method: "POST", body: JSON.stringify({ name, description }) }),
@@ -118,5 +174,5 @@ export const api = {
   createFinding: (testRunId: string, payload: Omit<Finding, "id" | "test_run_id" | "created_at">) =>
     request<Finding>(`/api/test-runs/${testRunId}/findings`, { method: "POST", body: JSON.stringify(payload) }),
 
-  reportUrl: (testRunId: string, format: "md" | "html") => `${BASE_URL}/api/test-runs/${testRunId}/report.${format}`,
+  openReport: fetchReportBlobUrl,
 };

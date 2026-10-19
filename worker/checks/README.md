@@ -2,23 +2,33 @@
 
 Each module here implements one analysis step and returns a plain `dict` of
 findings that `tasks.py` merges into `App.extracted_metadata` and maps onto
-`ControlResult` rows via `tasks.AUTOMATED_CONTROL_MAPPERS`.
+`ControlResult` rows via `app.services.automated_checks.AUTOMATED_CONTROL_MAPPERS`
+(that mapping — and *why* each check feeds the control it does, traced
+through the relevant MASWE weakness — lives in that module's docstring,
+not here, so there's one place to keep in sync rather than two).
 
 ## Implemented
 
 - `manifest_check.py` — Android manifest & permissions (via Androguard):
   package/version, declared permissions, exported components, `debuggable`,
-  and `usesCleartextTraffic`. Feeds MASVS-PLATFORM-1, MASVS-PLATFORM-2,
-  MASVS-CODE-2, and MASVS-NETWORK-1.
+  and `usesCleartextTraffic`. Feeds MASVS-PRIVACY-1, MASVS-PLATFORM-1,
+  MASVS-RESILIENCE-4, and MASVS-NETWORK-1.
 
 ## Intended next checks (not yet implemented)
 
 - `secrets_check.py` — entropy + regex scan over decompiled sources (jadx
-  output) and resources for hardcoded keys/credentials → MASVS-CRYPTO-3.
+  output) and resources for hardcoded keys/credentials → MASVS-STORAGE-1
+  (MASWE-0004, "Sensitive Data Hardcoded in the App Package").
 - `network_config_check.py` — parse Android Network Security Config /
   iOS ATS (Info.plist) → MASVS-NETWORK-2.
 - `binary_check.py` — native library inspection (stripped symbols, PIE,
   stack protector) → MASVS-RESILIENCE-*.
+
+Adding any of these means updating three places together, not just
+dropping in the new module — see
+`app/services/automated_checks.py` and `data/catalog/generate_catalog.py`'s
+`AUTOMATED_CONTROLS` set, and `tests/test_catalog.py` will fail the build
+if they drift out of sync with each other.
 
 ## Dynamic testing hook point (not yet implemented)
 

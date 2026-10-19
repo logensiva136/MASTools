@@ -4,9 +4,10 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
-from app import models, schemas
+from app import auth, models, schemas
 from app.config import get_settings
 from app.database import get_db
+from app.routers.projects import get_owned_project
 
 router = APIRouter(prefix="/api", tags=["apps"])
 
@@ -23,15 +24,29 @@ def _detect_platform(filename: str) -> models.Platform:
     raise HTTPException(400, f"Unsupported file type '{suffix}'. Expected .apk or .ipa.")
 
 
+def get_owned_app(app_id: uuid.UUID, db: Session, current_user: models.User) -> models.App:
+    """An app belongs to a project, which belongs to a user — so ownership
+    is enforced by joining up to the project, same as every other
+    resource that hangs off a project (test runs, results, findings)."""
+    app_row = (
+        db.query(models.App)
+        .join(models.Project)
+        .filter(models.App.id == app_id, models.Project.owner_id == current_user.id)
+        .one_or_none()
+    )
+    if not app_row:
+        raise HTTPException(404, "App not found")
+    return app_row
+
+
 @router.post("/projects/{project_id}/apps", response_model=schemas.AppOut, status_code=201)
 async def upload_app(
     project_id: uuid.UUID,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
 ):
-    project = db.get(models.Project, project_id)
-    if not project:
-        raise HTTPException(404, "Project not found")
+    get_owned_project(project_id, db, current_user)
 
     platform = _detect_platform(file.filename)
     settings = get_settings()
@@ -68,7 +83,12 @@ async def upload_app(
 
 
 @router.get("/projects/{project_id}/apps", response_model=list[schemas.AppOut])
-def list_apps(project_id: uuid.UUID, db: Session = Depends(get_db)):
+def list_apps(
+    project_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    get_owned_project(project_id, db, current_user)
     return (
         db.query(models.App)
         .filter(models.App.project_id == project_id)
@@ -78,19 +98,22 @@ def list_apps(project_id: uuid.UUID, db: Session = Depends(get_db)):
 
 
 @router.get("/apps/{app_id}", response_model=schemas.AppOut)
-def get_app(app_id: uuid.UUID, db: Session = Depends(get_db)):
-    app_row = db.get(models.App, app_id)
-    if not app_row:
-        raise HTTPException(404, "App not found")
-    return app_row
+def get_app(
+    app_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    return get_owned_app(app_id, db, current_user)
 
 
 @router.post("/apps/{app_id}/scan", status_code=202)
-def trigger_scan(app_id: uuid.UUID, db: Session = Depends(get_db)):
+def trigger_scan(
+    app_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
     """Kick off the Celery static-analysis pipeline for this app."""
-    app_row = db.get(models.App, app_id)
-    if not app_row:
-        raise HTTPException(404, "App not found")
+    app_row = get_owned_app(app_id, db, current_user)
 
     from app.celery_app import celery_app
 
