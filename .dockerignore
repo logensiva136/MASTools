@@ -1,0 +1,27 @@
+# The backend/worker/frontend Dockerfiles all build from the repo root
+# context (so the prod stages can reach across directories — see each
+# Dockerfile's top comment). Without this file that context would include
+# .git, node_modules, and every ignored volume directory on every build.
+.git
+.github
+
+**/__pycache__
+**/*.pyc
+.venv
+venv
+
+frontend/node_modules
+frontend/dist
+**/*.tsbuildinfo
+
+uploads/
+worker/tools_cache/
+postgres-data/
+
+.env
+*.env.local
+
+.vscode
+.idea
+*.swp
+.DS_Store

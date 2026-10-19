@@ -1,0 +1,157 @@
+name: mastools
+
+# Production deployment. Standalone — not merged with docker-compose.yml —
+# so dev and prod can't accidentally cross-contaminate each other's volumes
+# or ports. Run with:
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Differences from docker-compose.yml (dev):
+#   - api/worker/web build from each Dockerfile's "prod" stage: code is
+#     baked into the image (no bind mounts), containers run as a non-root
+#     user, no --reload, the frontend is a static bundle served by nginx
+#     instead of the Vite dev server.
+#   - postgres and redis are not published to the host at all — only the
+#     api/worker containers reach them, over the compose network.
+#   - containers run with cap_drop: [ALL], no-new-privileges, and a
+#     read-only root filesystem (api/worker get a small tmpfs for /tmp;
+#     their actual writable state is the uploads/postgres/redis volumes).
+#
+# This still assumes you put a TLS-terminating reverse proxy (Caddy, nginx,
+# Traefik) in front of the api/web ports below — neither container
+# terminates TLS itself.
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mastools}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env — no default in production}
+      POSTGRES_DB: ${POSTGRES_DB:-mastools}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mastools}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 1g
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: prod
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:?Set BACKEND_CORS_ORIGINS in .env to your real frontend origin}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./data:/data/catalog:ro
+      - uploads:/data/uploads
+    ports:
+      - "${API_HOST_PORT:-8000}:8000"
+    command: >
+      sh -c "alembic upgrade head &&
+             python -m app.services.catalog_loader &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 1g
+
+  worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+      target: prod
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - uploads:/data/uploads
+      - tools-cache:/opt/tools-cache
+    command: celery -A tasks worker --loglevel=info --concurrency=2
+    healthcheck:
+      test: ["CMD", "celery", "-A", "tasks", "inspect", "ping", "-d", "celery@$$HOSTNAME"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 2g
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      target: prod
+      args:
+        VITE_API_BASE_URL: ${PUBLIC_API_BASE_URL:?Set PUBLIC_API_BASE_URL in .env to the API's public URL (e.g. https://api.example.com)}
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "${WEB_HOST_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+
+volumes:
+  postgres-data:
+  uploads:
+  tools-cache:

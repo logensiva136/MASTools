@@ -1,7 +1,12 @@
 # Worker image: Celery + the static-analysis toolchain (Java, apktool, jadx).
 # All tool invocations happen here so the Windows host stays clean — nothing
 # needs installing outside Docker Desktop.
-FROM python:3.12-slim
+#
+# Build context is the repo root (see docker-compose.yml / .prod.yml): the
+# worker imports the backend's SQLAlchemy models (see tasks.py), and the
+# prod stage needs to copy that package in at build time instead of
+# mounting it read-only at runtime like the dev stage does.
+FROM python:3.12-slim AS base
 
 ARG APKTOOL_VERSION=2.9.3
 ARG JADX_VERSION=1.5.1
@@ -32,13 +37,31 @@ RUN mkdir -p /opt/tools/jadx \
 
 WORKDIR /worker
 
-COPY requirements.txt .
+COPY worker/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
-
 ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/worker:/app \
     TOOLS_CACHE_DIR=/opt/tools-cache
 
+# --- dev: used by docker-compose.yml. Code (both ./worker and the backend
+# package it imports from /app) arrives via bind mounts, so this stage
+# intentionally doesn't COPY it or drop to a non-root user. ---
+FROM base AS dev
 CMD ["celery", "-A", "tasks", "worker", "--loglevel=info"]
+
+# --- prod: used by docker-compose.prod.yml. Both ./worker and the backend
+# package are baked into the image at build time instead of mounted. ---
+FROM base AS prod
+
+RUN useradd --create-home --uid 1000 worker \
+    && mkdir -p /data/uploads /opt/tools-cache /app \
+    && chown -R worker:worker /data/uploads /opt/tools-cache /worker /app
+
+COPY --chown=worker:worker worker/ .
+COPY --chown=worker:worker backend/ /app
+
+USER worker
+
+CMD ["celery", "-A", "tasks", "worker", "--loglevel=info", "--concurrency=2"]
