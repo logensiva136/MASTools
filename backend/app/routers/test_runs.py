@@ -3,19 +3,50 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 
-from app import models, schemas
+from app import auth, models, schemas
 from app.config import get_settings
 from app.database import get_db
+from app.routers.apps import get_owned_app
 from app.services.automated_checks import apply_automated_results
 
 router = APIRouter(prefix="/api", tags=["test-runs"])
 
 
+def get_owned_test_run(test_run_id: uuid.UUID, db: Session, current_user: models.User) -> models.TestRun:
+    test_run = (
+        db.query(models.TestRun)
+        .join(models.App)
+        .join(models.Project)
+        .filter(models.TestRun.id == test_run_id, models.Project.owner_id == current_user.id)
+        .one_or_none()
+    )
+    if not test_run:
+        raise HTTPException(404, "Test run not found")
+    return test_run
+
+
+def get_owned_result(result_id: uuid.UUID, db: Session, current_user: models.User) -> models.ControlResult:
+    result = (
+        db.query(models.ControlResult)
+        .join(models.TestRun)
+        .join(models.App)
+        .join(models.Project)
+        .filter(models.ControlResult.id == result_id, models.Project.owner_id == current_user.id)
+        .one_or_none()
+    )
+    if not result:
+        raise HTTPException(404, "Result not found")
+    return result
+
+
 @router.post("/apps/{app_id}/test-runs", response_model=schemas.TestRunOut, status_code=201)
-def create_test_run(app_id: uuid.UUID, payload: schemas.TestRunCreate, db: Session = Depends(get_db)):
-    app_row = db.get(models.App, app_id)
-    if not app_row:
-        raise HTTPException(404, "App not found")
+def create_test_run(
+    app_id: uuid.UUID,
+    payload: schemas.TestRunCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    app_row = get_owned_app(app_id, db, current_user)
 
     settings = get_settings()
     test_run = models.TestRun(
@@ -56,7 +87,12 @@ def create_test_run(app_id: uuid.UUID, payload: schemas.TestRunCreate, db: Sessi
 
 
 @router.get("/apps/{app_id}/test-runs", response_model=list[schemas.TestRunOut])
-def list_test_runs(app_id: uuid.UUID, db: Session = Depends(get_db)):
+def list_test_runs(
+    app_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    get_owned_app(app_id, db, current_user)
     return (
         db.query(models.TestRun)
         .filter(models.TestRun.app_id == app_id)
@@ -66,15 +102,21 @@ def list_test_runs(app_id: uuid.UUID, db: Session = Depends(get_db)):
 
 
 @router.get("/test-runs/{test_run_id}", response_model=schemas.TestRunOut)
-def get_test_run(test_run_id: uuid.UUID, db: Session = Depends(get_db)):
-    test_run = db.get(models.TestRun, test_run_id)
-    if not test_run:
-        raise HTTPException(404, "Test run not found")
-    return test_run
+def get_test_run(
+    test_run_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    return get_owned_test_run(test_run_id, db, current_user)
 
 
 @router.get("/test-runs/{test_run_id}/results", response_model=list[schemas.ControlResultOut])
-def list_results(test_run_id: uuid.UUID, db: Session = Depends(get_db)):
+def list_results(
+    test_run_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    get_owned_test_run(test_run_id, db, current_user)
     results = (
         db.query(models.ControlResult)
         .options(joinedload(models.ControlResult.control))
@@ -87,10 +129,13 @@ def list_results(test_run_id: uuid.UUID, db: Session = Depends(get_db)):
 
 
 @router.patch("/results/{result_id}", response_model=schemas.ControlResultOut)
-def update_result(result_id: uuid.UUID, payload: schemas.ControlResultUpdate, db: Session = Depends(get_db)):
-    result = db.get(models.ControlResult, result_id)
-    if not result:
-        raise HTTPException(404, "Result not found")
+def update_result(
+    result_id: uuid.UUID,
+    payload: schemas.ControlResultUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    result = get_owned_result(result_id, db, current_user)
 
     if payload.status is not None:
         result.status = payload.status
@@ -108,10 +153,13 @@ def update_result(result_id: uuid.UUID, payload: schemas.ControlResultUpdate, db
 
 
 @router.post("/test-runs/{test_run_id}/findings", response_model=schemas.FindingOut, status_code=201)
-def create_finding(test_run_id: uuid.UUID, payload: schemas.FindingCreate, db: Session = Depends(get_db)):
-    test_run = db.get(models.TestRun, test_run_id)
-    if not test_run:
-        raise HTTPException(404, "Test run not found")
+def create_finding(
+    test_run_id: uuid.UUID,
+    payload: schemas.FindingCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    get_owned_test_run(test_run_id, db, current_user)
 
     finding = models.Finding(test_run_id=test_run_id, **payload.model_dump())
     db.add(finding)
@@ -121,7 +169,12 @@ def create_finding(test_run_id: uuid.UUID, payload: schemas.FindingCreate, db: S
 
 
 @router.get("/test-runs/{test_run_id}/findings", response_model=list[schemas.FindingOut])
-def list_findings(test_run_id: uuid.UUID, db: Session = Depends(get_db)):
+def list_findings(
+    test_run_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    get_owned_test_run(test_run_id, db, current_user)
     return (
         db.query(models.Finding)
         .filter(models.Finding.test_run_id == test_run_id)
@@ -131,12 +184,14 @@ def list_findings(test_run_id: uuid.UUID, db: Session = Depends(get_db)):
 
 
 @router.post("/test-runs/{test_run_id}/complete", response_model=schemas.TestRunOut)
-def complete_test_run(test_run_id: uuid.UUID, db: Session = Depends(get_db)):
+def complete_test_run(
+    test_run_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
     from datetime import datetime
 
-    test_run = db.get(models.TestRun, test_run_id)
-    if not test_run:
-        raise HTTPException(404, "Test run not found")
+    test_run = get_owned_test_run(test_run_id, db, current_user)
 
     test_run.status = models.TestRunStatus.completed
     test_run.completed_at = datetime.utcnow()

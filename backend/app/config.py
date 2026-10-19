@@ -25,6 +25,13 @@ class Settings(BaseSettings):
 
     backend_cors_origins: str = "http://localhost:5173,http://localhost:3000"
 
+    # No default on purpose: a hardcoded fallback here would mean every
+    # install that forgets to set this shares the same JWT signing key.
+    # Generate one with `openssl rand -hex 32` and set it in .env — the
+    # container fails to start with a clear pydantic error if it's unset.
+    secret_key: str
+    access_token_expire_minutes: int = 60 * 24
+
     @property
     def sqlalchemy_database_url(self) -> str:
         if self.database_url:

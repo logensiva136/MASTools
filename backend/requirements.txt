@@ -11,3 +11,6 @@ python-multipart==0.0.19
 PyYAML==6.0.2
 Jinja2==3.1.4
 python-slugify==8.0.4
+pyjwt==2.10.1
+bcrypt==4.2.1
+email-validator==2.2.0
